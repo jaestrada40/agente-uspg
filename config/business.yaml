@@ -1,0 +1,25 @@
+# Configuración del negocio — Generado por AgentKit
+negocio:
+  nombre: "Universidad San Pablo de Guatemala (USPG)"
+  descripcion: >
+    Universidad guatemalteca con oferta de pregrado, maestrías y doctorados.
+    Atiende tanto a aspirantes nuevos que buscan información de carreras,
+    requisitos e inscripción, como a estudiantes ya inscritos que necesitan
+    soporte y seguimiento.
+  horario: "Lunes a Viernes 9am a 6pm, Sábados 10am a 2pm"
+
+agente:
+  nombre: "Asistente USPG"
+  tono: "Empático y cálido"
+  casos_de_uso:
+    - "Responder preguntas frecuentes sobre carreras, posgrados, requisitos y precios"
+    - "Agendar citas de orientación vocacional"
+    - "Calificar y dar seguimiento a leads (aspirantes interesados)"
+    - "Guiar y acompañar el proceso de inscripción de nuevos aspirantes"
+    - "Dar seguimiento a aspirantes que no completaron su inscripción"
+    - "Brindar soporte a estudiantes ya inscritos"
+
+metadata:
+  creado: "2026-08-29"
+  proveedor: "zernio"
+  version: "2.0"
