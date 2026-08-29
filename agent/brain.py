@@ -22,7 +22,18 @@ from google.genai import types
 load_dotenv()
 logger = logging.getLogger("agentkit")
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# El cliente se crea recien cuando se necesita, no al importar el modulo: si falta
+# GEMINI_API_KEY, el servidor tiene que poder arrancar igual y avisarlo en el health
+# check, en vez de morirse en el import y dejar a Railway reiniciando el contenedor a ciegas.
+_client: genai.Client | None = None
+
+
+def _obtener_cliente() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    return _client
+
 
 # El modelo se cambia desde .env, sin tocar el codigo.
 # gemini-3.5-flash es el default: rapido y con capa gratuita para probar.
@@ -130,8 +141,12 @@ async def generar_respuesta(mensaje: str, historial: list[dict]) -> tuple[str, b
 
     system_prompt = cargar_system_prompt()
 
+    if not os.getenv("GEMINI_API_KEY"):
+        logger.error("GEMINI_API_KEY no esta configurada: no se puede llamar a Gemini")
+        return obtener_mensaje_error(), False
+
     try:
-        respuesta = await client.aio.models.generate_content(
+        respuesta = await _obtener_cliente().aio.models.generate_content(
             model=MODELO,
             contents=contenidos,
             config=types.GenerateContentConfig(
