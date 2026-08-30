@@ -167,6 +167,25 @@ async def limpiar_eventos_viejos(dias: int = 7):
         logger.info(f"Se limpiaron {resultado.rowcount} eventos de mas de {dias} dias")
 
 
+async def limpiar_datos_personales_viejos(dias: int) -> dict[str, int]:
+    """Elimina conversaciones, leads y citas que excedieron la retencion definida."""
+    if dias < 1:
+        raise ValueError("La retencion de datos debe ser de al menos un dia")
+
+    limite = ahora() - timedelta(days=dias)
+    async with async_session() as session:
+        mensajes = await session.execute(delete(Mensaje).where(Mensaje.timestamp < limite))
+        leads = await session.execute(delete(Lead).where(Lead.actualizado_en < limite))
+        citas = await session.execute(delete(Cita).where(Cita.creado_en < limite))
+        await session.commit()
+
+    return {
+        "mensajes": mensajes.rowcount or 0,
+        "leads": leads.rowcount or 0,
+        "citas": citas.rowcount or 0,
+    }
+
+
 async def guardar_mensaje(telefono: str, role: str, content: str):
     """Guarda un mensaje en el historial de esa conversacion."""
     async with async_session() as session:
@@ -204,6 +223,15 @@ async def limpiar_historial(telefono: str):
     """Borra todo el historial de una conversacion."""
     async with async_session() as session:
         await session.execute(delete(Mensaje).where(Mensaje.telefono == telefono))
+        await session.commit()
+
+
+async def borrar_datos_personales(telefono: str):
+    """Atiende solicitudes de supresion de datos de un contacto."""
+    async with async_session() as session:
+        await session.execute(delete(Mensaje).where(Mensaje.telefono == telefono))
+        await session.execute(delete(Lead).where(Lead.telefono == telefono))
+        await session.execute(delete(Cita).where(Cita.telefono == telefono))
         await session.commit()
 
 

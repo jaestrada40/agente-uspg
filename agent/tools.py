@@ -196,7 +196,8 @@ async def crear_solicitud_inscripcion(telefono: str, nombre: str, carrera: str) 
         cuerpo = {}
 
     if r.status_code >= 500:
-        logger.error(f"El sistema académico respondió {r.status_code}: {r.text[:300]}")
+        # La respuesta puede incluir datos del aspirante; no se registra su cuerpo.
+        logger.error(f"El sistema académico respondió HTTP {r.status_code}")
         return {
             "status": "error",
             "message": "El sistema académico tuvo un problema técnico al crear la cuenta.",

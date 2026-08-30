@@ -41,8 +41,7 @@ class ProveedorZernio(ProveedorWhatsApp):
             logger.warning("ZERNIO_API_KEY no esta configurada: el agente no va a poder responder")
         if not self.webhook_secret:
             logger.warning(
-                "ZERNIO_WEBHOOK_SECRET no esta configurado: los webhooks NO se verifican. "
-                "Sirve para probar, pero no lo dejes asi en produccion."
+                "ZERNIO_WEBHOOK_SECRET no esta configurado: todos los webhooks seran rechazados."
             )
 
     # ── Recibir ──────────────────────────────────────────────────────────
@@ -50,7 +49,7 @@ class ProveedorZernio(ProveedorWhatsApp):
     async def verificar_firma(self, request: Request) -> bool:
         """Compara el header X-Zernio-Signature contra el HMAC-SHA256 del cuerpo crudo."""
         if not self.webhook_secret:
-            return True  # modo pruebas, ya se advirtio al arrancar
+            return False
 
         firma_recibida = request.headers.get("X-Zernio-Signature") or request.headers.get(
             "X-Late-Signature"
@@ -160,15 +159,11 @@ class ProveedorZernio(ProveedorWhatsApp):
         if r.status_code == 200:
             return True
 
-        # Zernio responde {"error": ..., "type": ..., "code": ...}.
-        # Loguear los tres ahorra muchisimo tiempo de diagnostico.
-        detalle = r.text[:500]
+        # No se registra el cuerpo remoto: puede contener datos de la conversacion.
+        detalle = "sin detalle"
         try:
             cuerpo = r.json()
-            detalle = (
-                f"{cuerpo.get('error')} "
-                f"(type={cuerpo.get('type')}, code={cuerpo.get('code')})"
-            )
+            detalle = f"type={cuerpo.get('type')}, code={cuerpo.get('code')}"
         except ValueError:
             pass
         logger.error(f"Zernio rechazo el envio [{r.status_code}]: {detalle}")
@@ -183,6 +178,8 @@ class ProveedorZernio(ProveedorWhatsApp):
         """
         if not self.api_key:
             return False, "Falta ZERNIO_API_KEY"
+        if not self.webhook_secret:
+            return False, "Falta ZERNIO_WEBHOOK_SECRET; los webhooks se rechazan por seguridad"
         if not self.account_id:
             return True, "ZERNIO_ACCOUNT_ID no configurado: se omite el chequeo del numero"
 
@@ -197,7 +194,7 @@ class ProveedorZernio(ProveedorWhatsApp):
             return False, f"No se pudo contactar a Zernio: {e}"
 
         if r.status_code != 200:
-            return False, f"Zernio respondio {r.status_code}: {r.text[:200]}"
+            return False, f"Zernio respondio HTTP {r.status_code}"
 
         telefono = r.json().get("phone") or {}
         return True, (

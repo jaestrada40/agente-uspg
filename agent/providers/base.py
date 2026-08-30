@@ -45,9 +45,10 @@ class ProveedorWhatsApp(ABC):
     async def verificar_firma(self, request: Request) -> bool:
         """
         Confirma que el webhook viene de verdad del proveedor.
-        Por defecto acepta todo; cada proveedor lo implementa segun su esquema.
+        Un proveedor debe implementar su esquema de firma explicitamente. Fallar
+        cerrado evita que un adaptador nuevo exponga el webhook por accidente.
         """
-        return True
+        return False
 
     async def validar_webhook(self, request: Request) -> str | None:
         """Verificacion GET del webhook. Solo Meta la usa. Retorna la respuesta o None."""
