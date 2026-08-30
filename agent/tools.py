@@ -13,8 +13,10 @@ por ahora estan listas para usarse a mano o para conectarlas cuando se agregue e
 """
 
 import logging
+import os
 from pathlib import Path
 
+import httpx
 import yaml
 
 from agent.memory import (
@@ -140,3 +142,67 @@ async def listar_pendientes_de_seguimiento() -> list[dict]:
     puede escribir primero fuera de la ventana de 24 horas de WhatsApp sin plantilla.
     """
     return await listar_leads_para_seguimiento()
+
+
+# ── Sistema académico (crear cuenta de estudiante) ──────────────────────────
+#
+# Conecta con el Sistema Académico USPG (proyecto aparte: uspg-sistema-academico),
+# vía su endpoint POST /api/integrations/whatsapp/solicitudes-inscripcion.
+#
+# El sistema académico, no esta funcion, decide si la solicitud termina en una cuenta
+# real o en revision manual (por ejemplo, si la carrera todavia no tiene un plan
+# curricular cargado). Aca solo se llama al endpoint y se traduce la respuesta.
+#
+# El telefono SIEMPRE lo pasa main.py desde el remitente real del mensaje de
+# WhatsApp — nunca se le pide al modelo que lo escriba, para que no pueda
+# equivocarse ni inventarlo.
+
+
+async def crear_solicitud_inscripcion(telefono: str, nombre: str, carrera: str) -> dict:
+    """
+    Registra a un aspirante en el Sistema Académico USPG a partir de la conversación
+    de WhatsApp. Si la carrera tiene un plan curricular activo, crea la cuenta real
+    (usuario + estudiante) de inmediato y devuelve el carné, el correo institucional
+    generado y la contraseña temporal — el sistema también le manda esos datos por
+    correo y avisa al equipo de admisiones para que lo revise. Si la carrera todavía
+    no está cargada en el sistema, la solicitud queda pendiente de revisión manual.
+    """
+    base_url = (os.getenv("ACADEMIC_SYSTEM_URL") or "").rstrip("/")
+    api_key = os.getenv("ACADEMIC_SYSTEM_API_KEY") or ""
+
+    if not base_url or not api_key:
+        logger.error("ACADEMIC_SYSTEM_URL o ACADEMIC_SYSTEM_API_KEY no configuradas")
+        return {
+            "status": "error",
+            "message": "No se pudo conectar con el sistema académico en este momento.",
+        }
+
+    url = f"{base_url}/api/integrations/whatsapp/solicitudes-inscripcion"
+    payload = {"name": nombre, "phone": telefono, "careerName": carrera}
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as cliente:
+            r = await cliente.post(url, json=payload, headers={"X-API-Key": api_key})
+    except httpx.HTTPError as e:
+        logger.error(f"Error de red hablando con el sistema académico: {e}")
+        return {
+            "status": "error",
+            "message": "No se pudo conectar con el sistema académico en este momento.",
+        }
+
+    try:
+        cuerpo = r.json()
+    except ValueError:
+        cuerpo = {}
+
+    if r.status_code >= 500:
+        logger.error(f"El sistema académico respondió {r.status_code}: {r.text[:300]}")
+        return {
+            "status": "error",
+            "message": "El sistema académico tuvo un problema técnico al crear la cuenta.",
+        }
+
+    # 200/201 (creada), 202 (pendiente), 409 (ya existe): todos son respuestas
+    # validas del negocio, no errores — se devuelven tal cual para que el agente
+    # redacte la respuesta al aspirante con esa informacion.
+    return cuerpo or {"status": "error", "message": "Respuesta vacía del sistema académico."}
