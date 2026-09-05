@@ -219,7 +219,9 @@ async def crear_solicitud_inscripcion(
         async with httpx.AsyncClient(timeout=45.0) as cliente:
             r = await cliente.post(url, json=payload, headers={"X-API-Key": api_key})
     except httpx.HTTPError as e:
-        logger.error(f"Error de red hablando con el sistema académico: {e!r}")
+        # Solo el tipo de error (ReadTimeout, ConnectError...). Ni el mensaje crudo ni
+        # el objeto de la peticion, que podrian arrastrar la URL o el payload.
+        logger.error(f"Error de red hablando con el sistema académico: {type(e).__name__}")
         return {
             "status": "error",
             "message": "No se pudo conectar con el sistema académico en este momento.",
