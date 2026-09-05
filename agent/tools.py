@@ -213,10 +213,13 @@ async def crear_solicitud_inscripcion(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=20.0) as cliente:
+        # 45s: crear la cuenta puede tardar (varias escrituras + notificaciones del
+        # lado del sistema académico). El proveedor de WhatsApp ya recibió su 200, así
+        # que este trabajo corre en segundo plano y puede darse ese margen.
+        async with httpx.AsyncClient(timeout=45.0) as cliente:
             r = await cliente.post(url, json=payload, headers={"X-API-Key": api_key})
     except httpx.HTTPError as e:
-        logger.error(f"Error de red hablando con el sistema académico: {e}")
+        logger.error(f"Error de red hablando con el sistema académico: {e!r}")
         return {
             "status": "error",
             "message": "No se pudo conectar con el sistema académico en este momento.",
@@ -235,7 +238,22 @@ async def crear_solicitud_inscripcion(
             "message": "El sistema académico tuvo un problema técnico al crear la cuenta.",
         }
 
-    # 200/201 (creada), 202 (pendiente), 409 (ya existe): todos son respuestas
-    # validas del negocio, no errores — se devuelven tal cual para que el agente
-    # redacte la respuesta al aspirante con esa informacion.
-    return cuerpo or {"status": "error", "message": "Respuesta vacía del sistema académico."}
+    # 200/201 (creada), 202 (pendiente), 409 (ya existe): respuestas validas del
+    # negocio — se devuelven tal cual para que el agente redacte con esa info.
+    if r.status_code in (200, 201, 202, 409):
+        return cuerpo or {"status": "error", "message": "Respuesta vacía del sistema académico."}
+
+    # Cualquier otro codigo (401 API key, 400 datos, 403, 404, 429...) es un problema
+    # de configuracion o de la peticion, no del aspirante. Se loguea el detalle real
+    # para poder diagnosticarlo, y se le devuelve al agente un "error" generico.
+    detalle = ""
+    if isinstance(cuerpo, dict):
+        detalle = str(cuerpo.get("message") or cuerpo.get("error") or "")
+    logger.error(
+        f"El sistema académico rechazó la solicitud [HTTP {r.status_code}]: "
+        f"{detalle or r.text[:300]}"
+    )
+    return {
+        "status": "error",
+        "message": "No se pudo completar el registro automático en este momento.",
+    }
