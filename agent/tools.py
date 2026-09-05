@@ -244,14 +244,15 @@ async def crear_solicitud_inscripcion(
         return cuerpo or {"status": "error", "message": "Respuesta vacía del sistema académico."}
 
     # Cualquier otro codigo (401 API key, 400 datos, 403, 404, 429...) es un problema
-    # de configuracion o de la peticion, no del aspirante. Se loguea el detalle real
-    # para poder diagnosticarlo, y se le devuelve al agente un "error" generico.
+    # de configuracion o de la peticion, no del aspirante. Se loguea SOLO el campo de
+    # error del cuerpo (mensajes cortos y sin PII); nunca el cuerpo crudo, que segun el
+    # endpoint podria traer datos del aspirante.
     detalle = ""
     if isinstance(cuerpo, dict):
-        detalle = str(cuerpo.get("message") or cuerpo.get("error") or "")
+        detalle = str(cuerpo.get("message") or cuerpo.get("error") or "")[:200]
     logger.error(
-        f"El sistema académico rechazó la solicitud [HTTP {r.status_code}]: "
-        f"{detalle or r.text[:300]}"
+        f"El sistema académico rechazó la solicitud [HTTP {r.status_code}]"
+        + (f": {detalle}" if detalle else " (sin mensaje de error en el cuerpo)")
     )
     return {
         "status": "error",
