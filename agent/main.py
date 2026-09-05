@@ -115,6 +115,22 @@ async def lifespan(app: FastAPI):
     else:
         logger.error(f"Proveedor de WhatsApp NO configurado: {error_configuracion}")
 
+    # Diagnostico de la integracion con el Sistema Academico (auto-inscripcion). Se
+    # loguea el estado —no el valor de la key— para que un problema de configuracion se
+    # vea en el arranque y no recien cuando un aspirante intenta inscribirse.
+    academic_url = (os.getenv("ACADEMIC_SYSTEM_URL") or "").strip()
+    academic_key = (os.getenv("ACADEMIC_SYSTEM_API_KEY") or "").strip()
+    if academic_url and academic_key:
+        logger.info(f"Sistema Academico (auto-inscripcion): configurado — {academic_url}")
+    else:
+        faltan = " y ".join(
+            n for n, v in (("ACADEMIC_SYSTEM_URL", academic_url), ("ACADEMIC_SYSTEM_API_KEY", academic_key)) if not v
+        )
+        logger.warning(
+            f"Sistema Academico (auto-inscripcion): NO configurado — falta {faltan}. "
+            "El agente puede conversar pero NO va a poder crear inscripciones."
+        )
+
     tarea_limpieza = asyncio.create_task(_limpiar_datos_periodicamente())
     try:
         yield

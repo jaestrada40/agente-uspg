@@ -194,11 +194,25 @@ async def crear_solicitud_inscripcion(
                 "que lo repita (ejemplo: nombre@gmail.com)."
             ),
         }
-    base_url = (os.getenv("ACADEMIC_SYSTEM_URL") or "").rstrip("/")
-    api_key = os.getenv("ACADEMIC_SYSTEM_API_KEY") or ""
+    # .strip() a proposito: al pegar variables de entorno en paneles como Railway es
+    # facil dejar un espacio o un salto de linea al final, y ahi la URL no resuelve.
+    base_url = (os.getenv("ACADEMIC_SYSTEM_URL") or "").strip().rstrip("/")
+    api_key = (os.getenv("ACADEMIC_SYSTEM_API_KEY") or "").strip()
 
     if not base_url or not api_key:
-        logger.error("ACADEMIC_SYSTEM_URL o ACADEMIC_SYSTEM_API_KEY no configuradas")
+        faltan = ", ".join(
+            nombre
+            for nombre, valor in (
+                ("ACADEMIC_SYSTEM_URL", base_url),
+                ("ACADEMIC_SYSTEM_API_KEY", api_key),
+            )
+            if not valor
+        )
+        logger.error(
+            f"No se puede inscribir: falta configurar {faltan} en las variables de "
+            "entorno de este servicio (revisar que estén en el servicio y entorno "
+            "correctos y volver a desplegar)"
+        )
         return {
             "status": "error",
             "message": "No se pudo conectar con el sistema académico en este momento.",
