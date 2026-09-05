@@ -14,6 +14,7 @@ por ahora estan listas para usarse a mano o para conectarlas cuando se agregue e
 
 import logging
 import os
+import re
 from pathlib import Path
 
 import httpx
@@ -144,6 +145,15 @@ async def listar_pendientes_de_seguimiento() -> list[dict]:
     return await listar_leads_para_seguimiento()
 
 
+# Validación mínima de correo: algo@algo.dominio. No pretende cubrir el RFC entero,
+# solo atajar typos evidentes antes de llamar al sistema académico.
+_RE_CORREO = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _correo_valido(correo: str) -> bool:
+    return bool(_RE_CORREO.match(correo or ""))
+
+
 # ── Sistema académico (crear cuenta de estudiante) ──────────────────────────
 #
 # Conecta con el Sistema Académico USPG (proyecto aparte: uspg-sistema-academico),
@@ -158,15 +168,32 @@ async def listar_pendientes_de_seguimiento() -> list[dict]:
 # equivocarse ni inventarlo.
 
 
-async def crear_solicitud_inscripcion(telefono: str, nombre: str, carrera: str) -> dict:
+async def crear_solicitud_inscripcion(
+    telefono: str, nombre: str, carrera: str, correo_personal: str = ""
+) -> dict:
     """
     Registra a un aspirante en el Sistema Académico USPG a partir de la conversación
     de WhatsApp. Si la carrera tiene un plan curricular activo, crea la cuenta real
     (usuario + estudiante) de inmediato y devuelve el carné, el correo institucional
-    generado y la contraseña temporal — el sistema también le manda esos datos por
-    correo y avisa al equipo de admisiones para que lo revise. Si la carrera todavía
-    no está cargada en el sistema, la solicitud queda pendiente de revisión manual.
+    generado y la contraseña temporal — el sistema le manda esos datos al correo
+    PERSONAL del aspirante (el que dio en el chat, porque todavía no puede entrar a su
+    correo institucional nuevo) y avisa al equipo de admisiones para que lo revise. Si
+    la carrera todavía no está cargada en el sistema, la solicitud queda pendiente de
+    revisión manual.
+
+    `correo_personal` es un correo externo (Gmail, Outlook, etc.). Se valida el
+    formato mínimo aquí: si no parece un correo, se devuelve status "error" sin
+    llamar al sistema académico, para que el agente lo vuelva a pedir.
     """
+    correo_personal = correo_personal.strip()
+    if not _correo_valido(correo_personal):
+        return {
+            "status": "error",
+            "message": (
+                "El correo personal no tiene un formato válido. Pídele al aspirante "
+                "que lo repita (ejemplo: nombre@gmail.com)."
+            ),
+        }
     base_url = (os.getenv("ACADEMIC_SYSTEM_URL") or "").rstrip("/")
     api_key = os.getenv("ACADEMIC_SYSTEM_API_KEY") or ""
 
@@ -178,7 +205,12 @@ async def crear_solicitud_inscripcion(telefono: str, nombre: str, carrera: str) 
         }
 
     url = f"{base_url}/api/integrations/whatsapp/solicitudes-inscripcion"
-    payload = {"name": nombre, "phone": telefono, "careerName": carrera}
+    payload = {
+        "name": nombre,
+        "phone": telefono,
+        "careerName": carrera,
+        "personalEmail": correo_personal,
+    }
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as cliente:

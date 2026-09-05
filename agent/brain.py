@@ -67,9 +67,9 @@ _TOOLS = [
                     "temporal); si no, la solicitud queda para revision manual del equipo de "
                     "admisiones. SOLO llamar despues de que el aspirante confirmo "
                     "explicitamente su nombre completo y la carrera exacta que quiere — "
-                    "resume esos datos y pide un 'si' o 'confirmo' antes de invocar esta "
-                    "funcion. Nunca la llames dos veces para el mismo aspirante en la misma "
-                    "conversacion."
+                    "resume esos datos (nombre, carrera y correo personal) y pide un 'si' o "
+                    "'confirmo' antes de invocar esta funcion. Nunca la llames dos veces "
+                    "para el mismo aspirante en la misma conversacion."
                 ),
                 parameters=types.Schema(
                     type=types.Type.OBJECT,
@@ -82,8 +82,17 @@ _TOOLS = [
                             type=types.Type.STRING,
                             description="Nombre exacto de la carrera de pregrado elegida (una de las 12 carreras de USPG).",
                         ),
+                        "correo_personal": types.Schema(
+                            type=types.Type.STRING,
+                            description=(
+                                "Correo electrónico personal del aspirante (Gmail, Outlook, etc.), "
+                                "tal como lo escribió en el chat. El Sistema Académico le envía ahí "
+                                "sus credenciales, porque todavía no puede entrar a su correo "
+                                "institucional nuevo. Debe tener formato válido (algo@algo.dominio)."
+                            ),
+                        ),
                     },
-                    required=["nombre", "carrera"],
+                    required=["nombre", "carrera", "correo_personal"],
                 ),
             )
         ]
@@ -176,6 +185,7 @@ async def _ejecutar_tool(nombre_funcion: str, argumentos: dict, telefono: str) -
             telefono=telefono,
             nombre=str(argumentos.get("nombre", "")),
             carrera=str(argumentos.get("carrera", "")),
+            correo_personal=str(argumentos.get("correo_personal", "")),
         )
     logger.warning(f"Gemini pidio una funcion desconocida: {nombre_funcion}")
     return {"status": "error", "message": "Esa acción no está disponible."}
