@@ -16,6 +16,7 @@ from time import monotonic
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 
 from agent.brain import generar_respuesta, obtener_mensaje_error
 from agent.memory import (
@@ -143,7 +144,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="AgentKit — WhatsApp AI Agent", version="2.0.0", lifespan=lifespan)
 
 
-@app.get("/")
+@app.get("/health")
 async def health_check():
     """Endpoint de salud para Railway y monitoreo."""
     if error_configuracion:
@@ -293,3 +294,10 @@ async def procesar_mensaje(msg: MensajeEntrante):
                     await proveedor.enviar_mensaje(msg.telefono, obtener_mensaje_error(), msg.contexto)
                 except Exception:  # noqa: BLE001
                     logger.error("Tampoco se pudo avisarle al cliente del error")
+
+
+# La landing page (site/index.html) se sirve en "/". Va al FINAL, despues de todas las
+# rutas de la API: un mount en "/" captura todo lo que no coincida antes, asi que si se
+# registrara primero taparia /webhook y /health.
+if os.path.isdir("site"):
+    app.mount("/", StaticFiles(directory="site", html=True), name="landing")
